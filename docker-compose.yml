@@ -1,0 +1,8 @@
+services:
+  npu-app:
+    build: .
+    container_name: npu-simulator-cli
+    volumes:
+      - .:/app
+    stdin_open: true  # -i 옵션과 동일
+    tty: true         # -t 옵션과 동일
