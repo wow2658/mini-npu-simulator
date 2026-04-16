@@ -1,5 +1,6 @@
 # main.py
 import json
+import time
 
 # ==========================================
 # 1. MAC 연산 엔진 및 판독기 (구 mac_engine.py)
@@ -121,6 +122,31 @@ def run_json_mode():
         # 5. 결과 출력
         print(f"검사: {filter_size_key} | 정답: {clean_label} | AI 판정: {result}")
 
+
+def run_performance_mode():
+    """
+    [모드 3] 성능 분석 모드.
+    다양한 크기(N x N)의 행렬을 생성하여 MAC 연산 시간을 측정함.
+    """
+    print("\n[모드 3] NPU 엔진 성능 분석 (O(N^2) 검증)")
+    
+    test_sizes = [3, 5, 11, 21, 31, 51, 101]
+    
+    for size in test_sizes:
+        dummy_matrix = [[1.0] * size for _ in range(size)]
+        
+        # 시작 시간 기록
+        start_time = time.perf_counter()
+        
+        for _ in range(10):
+            calculate_mac(dummy_matrix, dummy_matrix)
+            
+        # 종료 시간 기록
+        end_time = time.perf_counter()
+        
+        avg_time_ms = ((end_time - start_time) / 10) * 1000
+        print(f"크기 {size:3d}x{size:<3d} | 평균 연산 시간: {avg_time_ms:.5f} ms")
+
 def main():
     """
     프로그램 메인 진입점. 무한 루프를 돌며 메뉴를 출력함.
@@ -129,7 +155,8 @@ def main():
         print("\n=== Mini NPU Simulator ===")
         print("1. 사용자 입력 (3x3)")
         print("2. JSON 데이터 일괄 채점")
-        print("3. 종료")
+        print("3. 성능 분석 (O(N^2) 검증)")  # 💡 메뉴 이름 변경
+        print("4. 종료")                    # 💡 4번으로 밀림
         
         choice = input("선택: ")
         
@@ -138,6 +165,8 @@ def main():
         elif choice == '2':
             run_json_mode()
         elif choice == '3':
+            run_performance_mode()      # 💡 3번 누르면 스톱워치 모드 실행!
+        elif choice == '4':
             print("프로그램을 종료함.")
             break
         else:
