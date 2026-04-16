@@ -102,21 +102,26 @@ def run_json_mode():
     with open('data.json', 'r') as f:
         data = json.load(f)
         
+    # [핵심] 딕셔너리 순회와 items() 함수
+    # data['patterns']라는 커다란 딕셔너리(봉투 묶음)에서 
+    # 이름표(Key)와 실제 내용물(Value)을 한 쌍씩 뽑아냄
     for pattern_key, pattern_info in data['patterns'].items():
-        # 1. 파서 작동 (데이터 정제)
+        
+        # 1. 파서 작동 
         filter_size_key = extract_size_from_key(pattern_key)
         clean_label = normalize_label(pattern_info['expected'])
         
-        # 2. 데이터 추출
+        # 2. 데이터 추출 (내용물 딕셔너리에서 실제 2차원 리스트 꺼내기)
+        # pattern_info 역시 딕셔너리 덩어리이므로, [키값] 문법으로 데이터를 빼옴
         filter_matrix = pattern_info['filter']
         pattern_a = pattern_info['pattern_a']
         pattern_b = pattern_info['pattern_b']
         
-        # 3. 엔진 가동!
+        # 3. 엔진 가동! 
         score_a = calculate_mac(filter_matrix, pattern_a)
         score_b = calculate_mac(filter_matrix, pattern_b)
         
-        # 4. 점수 비교
+        # 4. 점수 비교 (누가 더 점수가 높은지 판독)
         result = compare_scores(score_a, score_b)
         
         # 5. 결과 출력
@@ -133,18 +138,29 @@ def run_performance_mode():
     test_sizes = [3, 5, 11, 21, 31, 51, 101]
     
     for size in test_sizes:
+        # [핵심] 리스트 내포(List Comprehension)와 리스트 곱셈의 원리
+        # 1. [1.0] * size : 숫자 곱하기가 아님! [1.0] 이라는 방을 size 개수만큼 '복사 붙여넣기' 해서 가로 한 줄을 만듦.
+        # 2. for _ in range(size) : 0, 1, 2... 숫자는 안 쓸 거니까 _(언더스코어)로 치우고, 그저 size 번만큼 "반복"하라는 뜻.
+        # 3. 종합 : 가로 한 줄을 만든 걸, 밑으로 size 번만큼 똑같이 찍어내서 N x N 2차원 행렬을 만들어냄.
         dummy_matrix = [[1.0] * size for _ in range(size)]
         
-        # 시작 시간 기록
+        # 시작 시간 기록: 일반 time.time()보다 훨씬 정밀한 시스템 타이머 사용
         start_time = time.perf_counter()
         
+        # 오차(노이즈)를 줄이기 위해 10번 연속으로 엔진 가동
         for _ in range(10):
             calculate_mac(dummy_matrix, dummy_matrix)
             
         # 종료 시간 기록
         end_time = time.perf_counter()
         
+        # 10회 총 경과 시간을 10으로 나누어 1회 평균 시간을 밀리초(ms)로 환산
         avg_time_ms = ((end_time - start_time) / 10) * 1000
+        
+        # [핵심] f-string 정렬 및 포맷 지정자
+        # {size:3d}  : 정수(d)를 3칸 확보해서 출력 (기본 오른쪽 정렬. 예: "  3")
+        # {size:<3d} : 정수(d)를 3칸 확보하되 왼쪽(<)으로 착 붙여서 정렬 (예: "3  ")
+        # {avg_time_ms:.5f} : 실수(f)를 소수점 아래 5자리까지만 남기고 자르기
         print(f"크기 {size:3d}x{size:<3d} | 평균 연산 시간: {avg_time_ms:.5f} ms")
 
 def main():
