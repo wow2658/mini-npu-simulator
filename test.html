@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시간차 오프셋 (스프링-댐퍼) 시뮬레이터</title>
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        canvas {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            cursor: grab;
+            touch-action: none;
+            /* 모바일 터치 스크롤 방지 */
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 30px;
+            background: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            width: 340px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        label {
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+        }
+
+        input[type="range"] {
+            cursor: pointer;
+        }
+
+        .formula {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #666;
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>머리카락 꿀렁임 (물리) 테스트</h2>
+    <canvas id="simCanvas" width="400" height="500"></canvas>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>탄성 (Stiffness): <span id="stiffnessVal">0.15</span></label>
+            <input type="range" id="stiffness" min="0.01" max="0.5" step="0.01" value="0.15">
+        </div>
+        <div class="control-group">
+            <label>감쇠력 (Damping): <span id="dampingVal">0.85</span></label>
+            <input type="range" id="damping" min="0.5" max="0.99" step="0.01" value="0.85">
+        </div>
+    </div>
+
+    <div class="formula">
+        <b>핵심 로직:</b><br>
+        1. 목표 위치 = 부모 좌표<br>
+        2. 가속도 = (목표 위치 - 현재 위치) * 탄성<br>
+        3. 현재 속도 = (현재 속도 + 가속도) * 감쇠력
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI 요소 연결
+        const stiffnessInput = document.getElementById('stiffness');
+        const dampingInput = document.getElementById('damping');
+        const stiffnessVal = document.getElementById('stiffnessVal');
+        const dampingVal = document.getElementById('dampingVal');
+
+        // 물리 변수 초기화
+        let stiffness = parseFloat(stiffnessInput.value);
+        let damping = parseFloat(dampingInput.value);
+
+        // UI 업데이트 이벤트
+        stiffnessInput.addEventListener('input', (e) => {
+            stiffness = parseFloat(e.target.value);
+            stiffnessVal.innerText = stiffness.toFixed(2);
+        });
+        dampingInput.addEventListener('input', (e) => {
+            damping = parseFloat(e.target.value);
+            dampingVal.innerText = damping.toFixed(2);
+        });
+
+        // 노드(관절) 초기화 (5개의 관절)
+        const segmentLength = 50; // 관절 간 기본 간격
+        const nodes = [];
+        for (let i = 0; i < 5; i++) {
+            nodes.push({
+                x: canvas.width / 2,
+                y: 100 + i * segmentLength,
+                vx: 0,
+                vy: 0
+            });
+        }
+
+        // 마우스/터치 인터랙션 상태
+        let isDragging = false;
+        let mouseX = canvas.width / 2;
+        let mouseY = 100;
+
+        function updateMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            // 터치 또는 마우스 좌표 가져오기
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            mouseX = clientX - rect.left;
+            mouseY = clientY - rect.top;
+        }
+
+        // 이벤트 리스너 세팅
+        canvas.addEventListener('mousedown', () => isDragging = true);
+        canvas.addEventListener('mousemove', (e) => { if (isDragging) updateMousePos(e); });
+        canvas.addEventListener('mouseup', () => isDragging = false);
+        canvas.addEventListener('mouseleave', () => isDragging = false);
+
+        canvas.addEventListener('touchstart', (e) => { isDragging = true; updateMousePos(e); e.preventDefault(); }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => { if (isDragging) updateMousePos(e); e.preventDefault(); }, { passive: false });
+        canvas.addEventListener('touchend', () => isDragging = false);
+
+        // 핵심 업데이트 루프 (초당 60회 실행)
+        function updateAndDraw() {
+            // 캔버스 지우기
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. 최상단 노드(머리)는 마우스를 따라감
+            if (isDragging) {
+                nodes[0].x = mouseX;
+                nodes[0].y = mouseY;
+            }
+
+            // 2. 물리 연산 (자식 노드들이 부모를 쫓아감)
+            for (let i = 1; i < nodes.length; i++) {
+                let parent = nodes[i - 1];
+                let current = nodes[i];
+
+                // 목표 위치: 부모의 바로 아래쪽 (segmentLength 만큼 띄워서)
+                let targetX = parent.x;
+                let targetY = parent.y + segmentLength;
+
+                // [훅의 법칙] 탄성(Stiffness)을 곱해 끌어당기는 힘(가속도) 계산
+                let forceX = (targetX - current.x) * stiffness;
+                let forceY = (targetY - current.y) * stiffness;
+
+                // [마찰력] 기존 속도에 힘을 더한 뒤 감쇠력(Damping)을 곱해줌
+                current.vx = (current.vx + forceX) * damping;
+                current.vy = (current.vy + forceY) * damping;
+
+                // 실제 좌표 이동
+                current.x += current.vx;
+                current.y += current.vy;
+            }
+
+            // 3. 렌더링 (선 그리기)
+            ctx.beginPath();
+            ctx.moveTo(nodes[0].x, nodes[0].y);
+            for (let i = 1; i < nodes.length; i++) {
+                ctx.lineTo(nodes[i].x, nodes[i].y);
+            }
+            ctx.strokeStyle = "#3b82f6";
+            ctx.lineWidth = 4;
+            ctx.lineCap = "round";
+            ctx.stroke();
+
+            // 4. 렌더링 (원 그리기)
+            for (let i = 0; i < nodes.length; i++) {
+                ctx.beginPath();
+                ctx.arc(nodes[i].x, nodes[i].y, i === 0 ? 12 : 8, 0, Math.PI * 2);
+                ctx.fillStyle = i === 0 ? "#ef4444" : "#ffffff";
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = i === 0 ? "#b91c1c" : "#3b82f6";
+                ctx.stroke();
+            }
+
+            // 다음 프레임 요청
+            requestAnimationFrame(updateAndDraw);
+        }
+
+        // 루프 시작
+        updateAndDraw();
+    </script>
+</body>
+
+</html>
